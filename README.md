@@ -1,5 +1,9 @@
 # MathOs-Sky Web
 
+**Aplicación pública:** https://samuelr2107.github.io/MathOs-Sky/
+
+Abre el enlace para utilizarla sin instalar Node ni descargar archivos.
+
 Aplicación de escenarios automáticos y manuales, conexiones, matrices, TSP real por fuerza bruta, resultados SVG, candidatas paginadas y diagnóstico de conexiones mínimas faltantes. HTML/CSS y módulos JavaScript, sin frameworks, backend ni dependencias de producción.
 
 ## Abrir
