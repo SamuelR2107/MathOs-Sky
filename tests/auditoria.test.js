@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {formatearNumero} from '../js/formato.js';
+import {Grafo} from '../js/grafo.js';import {resolverTSP} from '../js/tsp.js';import {fixture} from './helpers.js';
+test('7: valores positivos pequeños nunca se confunden con ausencia o cero',()=>{for(const n of [.00001,Number.MIN_VALUE,.009]){assert.notEqual(formatearNumero(n),'0');assert.notEqual(formatearNumero(n),'—');}assert.equal(formatearNumero(0),'0');});
+test('7: valores grandes tienen presentación acotada sin perder su escala',()=>{assert.match(formatearNumero(1e20),/E20/);assert.ok(formatearNumero(Number.MAX_VALUE).length<20);});
+test('7: presentación mantiene pesos normales y distingue los no finitos',()=>{assert.equal(formatearNumero(305),'305');assert.equal(formatearNumero(123.456),'123.46');for(const n of [Infinity,NaN])assert.equal(formatearNumero(n),'—');});
+test('7: cambiar un peso real altera el óptimo esperado y conserva otras métricas',()=>{const f=fixture('optimo_distancia');const g=Grafo.fromJSON({cantidadNodos:f.n,aristas:f.aristas});const tiempo=resolverTSP(g,0,'Tiempo');assert.equal(resolverTSP(g,0,'Distancia').mejorValor,5);g.modificarConexion(0,1,100,2,40);const r=resolverTSP(g,0,'Distancia');assert.equal(r.mejorValor,43);assert.deepEqual(r.mejorRuta,[0,2,1,3,4,0]);assert.deepEqual(resolverTSP(g,0,'Tiempo').mejorRuta,tiempo.mejorRuta);});

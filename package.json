@@ -1,0 +1,18 @@
+{
+  "name": "mathos-sky-motor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "benchmark": "node --expose-gc tests/benchmark.js",
+    "start": "node scripts/servidor.js",
+    "test:ui": "node tests/escenarios.browser.js && node tests/calculo.browser.js && node tests/animacion.browser.js",
+    "preparar:publicacion": "node scripts/preparar-publicacion.js",
+    "test:auditoria": "node tests/auditoria.browser.js",
+    "verificar:publicacion": "node scripts/verificar-publicacion.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
