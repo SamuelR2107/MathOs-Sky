@@ -1,3 +1,4 @@
+import {evaluarPesosEntreDepartamentos} from './validacionPesosManuales.js';
 import {formatearNumero as format} from './formato.js';
 import {crearPanelReproduccion} from './panelReproduccion.js';
 import {departamentosPeru} from './datosPeru.js';
@@ -14,6 +15,7 @@ export function iniciarInterfaz() {
   const selected = new Set();
   let mode='automatico', graphData=null, matrixData=null, dirty=false, opener=null, pageInfo=null;
   let resultGraph=null, candidateGraph=null, busy=false, blocked=[], synchronizing=false, editorPair=['',''];
+  let editorDesdePlan=false,volverAlPlan=false;
   let resultPlayer=null,candidatePlayer=null,ultimoResultado=null,matrixSelection=null,ultimoAnuncio=-Infinity,ultimaFase=null;
   const pausarReproduccion=()=>{resultPlayer?.pausar();candidatePlayer?.pausar();};
   const graph = new Visualizacion($('grafo-plan'));
@@ -43,7 +45,7 @@ export function iniciarInterfaz() {
   });
   navigate();
   document.addEventListener('click',e=>{
-    if(e.target.closest('[data-editor]'))openEditor();
+    if(e.target.closest('[data-editor]'))openEditor(undefined,!!e.target.closest('#sin-ciclo'));
     if(e.target.closest('#focus-config'))document.querySelector('[name=modo]:checked').focus();
   });
   all('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
@@ -116,8 +118,8 @@ export function iniciarInterfaz() {
   }
   const editorValues = () => ({origen:$('desde').value===''?null:Number($('desde').value),destino:$('hasta').value===''?null:Number($('hasta').value),distancia:Number($('distancia').value),tiempo:Number($('tiempo').value),costo:Number($('costo').value)});
   function clearEditorMessages() {
-    $('editor-error').textContent='';$('editor-valid').textContent='';
-    for(const key of ['desde','hasta','distancia','tiempo','costo']){$(`error-${key}`).textContent='';$(key).removeAttribute('aria-invalid');}
+    $('editor-error').textContent='';$('editor-valid').textContent='';$('editor-valid').classList.remove('field-warning');
+    for(const key of ['desde','hasta','distancia','tiempo','costo']){$(`error-${key}`).textContent='';$(`error-${key}`).classList.remove('field-warning');$(key).removeAttribute('aria-invalid');}
   }
   function requestPair() {
     const {origen,destino}=editorValues();
@@ -127,11 +129,12 @@ export function iniciarInterfaz() {
     if(valid)emit('editar-par',{origen,destino});
     else {for(const k of ['distancia','tiempo','costo'])$(k).value='';emit('editor-sin-par');}
   }
-  function openEditor(edge) {
+  function openEditor(edge,desdePlan=false) {
     pausarReproduccion();
     if(edge){matrixSelection=edge;drawMatrix();}
     if(busy){announce('Cancela o espera a que termine el cálculo para editar.');return;}
     if(!graphData){announce('Crea un escenario antes de editar conexiones.');return;}
+    editorDesdePlan=desdePlan;volverAlPlan=false;
     $('conexion-form').reset();clearEditorMessages();
     updateOptions($('desde'),graphData.nodos,'Elige un destino');updateOptions($('hasta'),graphData.nodos,'Elige otro destino');
     $('desde').value=edge?String(edge.origen):'';$('hasta').value=edge?String(edge.destino):'';
@@ -144,7 +147,7 @@ export function iniciarInterfaz() {
     if(dirty){$('discard-confirm').hidden=false;$('seguir-editando').focus();return;}
     $('editor').close();
   }
-  $('editor').addEventListener('close',()=>{document.body.style.overflow='';emit('editor-cerrado');(opener?.isConnected?opener:$('abrir-editor')).focus();});
+  $('editor').addEventListener('close',()=>{document.body.style.overflow='';emit('editor-cerrado');if(volverAlPlan){($('recomendaciones').querySelector('[data-pendiente]')??$('titulo-correccion')).focus();volverAlPlan=false;}else (opener?.isConnected?opener:editorDesdePlan?$('titulo-correccion'):$('abrir-editor')).focus();editorDesdePlan=false;});
   $('editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
   $('abrir-editor').addEventListener('click',()=>openEditor());
   for(const id of ['cerrar-editor','cancelar-editor'])$(id).addEventListener('click',closeEditor);
@@ -156,22 +159,38 @@ export function iniciarInterfaz() {
     }
     updateEndpoints();editorPair=[$('desde').value,$('hasta').value];dirty=false;clearEditorMessages();requestPair();
   });
-  $('conexion-form').addEventListener('input',e=>{if(['distancia','tiempo','costo'].includes(e.target.id)){dirty=true;$('editor-valid').textContent='';}});
+  $('conexion-form').addEventListener('input',e=>{if(['distancia','tiempo','costo'].includes(e.target.id)){dirty=true;clearEditorMessages();}});
   $('conexion-form').addEventListener('submit',e=>{
-    e.preventDefault();const errors=[];let first=null;
-    const labels={desde:'Elige el destino de salida.',hasta:'Elige un destino distinto.',distancia:'Introduce una distancia positiva y finita.',tiempo:'Introduce un tiempo positivo y finito.',costo:'Introduce un costo positivo y finito.'};
-    for(const id of ['desde','hasta','distancia','tiempo','costo']) {
+    e.preventDefault();clearEditorMessages();let first=null;
+    const extremos=editorValues();
+    for(const id of ['desde','hasta']){
       const field=$(id),number=Number(field.value);
-      const valid=['desde','hasta'].includes(id)?field.value!==''&&Number.isInteger(number)&&graphData?.nodos.some(n=>n.id===number)&&(id!=='hasta'||field.value!==$('desde').value):field.value!==''&&Number.isFinite(number)&&number>0;
+      const valid=field.value!==''&&Number.isInteger(number)&&graphData?.nodos.some(n=>n.id===number)&&(id!=='hasta'||field.value!==$('desde').value);
       field.setAttribute('aria-invalid',String(!valid));field.setAttribute('aria-describedby',`error-${id}`);
-      $(`error-${id}`).textContent=valid?'':labels[id];
-      if(!valid){first??=field;errors.push(labels[id]);}
+      if(!valid){$(`error-${id}`).textContent=id==='desde'?'Elige el destino de salida.':'Elige un destino distinto.';first??=field;}
     }
-    $('editor-error').textContent=errors.length?'Revisa los campos señalados antes de guardar.':'';
-    $('editor-valid').textContent='';
-    if(first){first.focus();return;}
-    if(e.submitter?.id==='guardar-conexion')emit('guardar-conexion',editorValues());
-    else {$('editor-valid').textContent='Campos válidos. Pulsa Guardar conexión para aplicarlos.';emit('borrador-validado',editorValues());}
+    if(first){$('editor-error').textContent='Selecciona dos destinos distintos antes de validar los pesos.';first.focus();return;}
+    const a=graphData.nodos.find(n=>n.id===extremos.origen),b=graphData.nodos.find(n=>n.id===extremos.destino);
+    const evaluacion=evaluarPesosEntreDepartamentos(Object.fromEntries(['distancia','tiempo','costo'].map(k=>[k,$(k).value])),a.idGeografico,b.idGeografico);
+    for(const [id,campo] of Object.entries(evaluacion.campos)){
+      $(id).setAttribute('aria-invalid',String(campo.nivel==='invalido'));$(id).setAttribute('aria-describedby',`error-${id}`);
+      $(`error-${id}`).textContent=campo.mensaje;$(`error-${id}`).classList.toggle('field-warning',campo.nivel==='atipico');
+      if(campo.nivel==='invalido')first??=$(id);
+    }
+    if(first){$('editor-error').textContent=evaluacion.mensaje;first.focus();return;}
+    $('editor-valid').textContent=evaluacion.mensaje;
+    $('editor-valid').classList.toggle('field-warning',evaluacion.nivel==='atipico');
+    if(e.submitter?.id!=='guardar-conexion'){
+      if(evaluacion.nivel==='habitual')$('editor-valid').textContent+=' Pulsa Guardar conexión para aplicarlos.';
+      emit('borrador-validado',{...extremos,nivel:evaluacion.nivel});return;
+    }
+    if(evaluacion.nivel==='atipico'){
+      const detalles=Object.values(evaluacion.campos).filter(c=>c.nivel==='atipico').map(c=>c.mensaje).join('\n\n');
+      if(!window.confirm(`${detalles}\n\nSon referencias académicas, no tarifas ni tiempos comerciales. ¿Guardar los valores personalizados sin cambiarlos?`)){
+        $('editor-valid').textContent='No se guardaron cambios. Revisa los valores inusuales.';return;
+      }
+    }
+    emit('guardar-conexion',extremos);
   });
   $('usar-modelo').addEventListener('click',()=>{
     if(['distancia','tiempo','costo'].some(k=>$(k).value!=='')&&!window.confirm('¿Reemplazar los valores del formulario por sugerencias del modelo? No se guardarán hasta que lo confirmes.'))return;
@@ -191,7 +210,7 @@ export function iniciarInterfaz() {
   }
   function mensajeEdicion(mensaje,error=false) {
     $('editor-error').textContent=error?mensaje:'';$('editor-valid').textContent=error?'':mensaje;
-    if(!error)dirty=false;announce(mensaje);
+    if(!error){dirty=false;$('editor-valid').classList.remove('field-warning');}announce(mensaje);
   }
   $('grafo-plan').addEventListener('seleccionar-nodo',e=>{
     $('graph-context').hidden=false;$('graph-context').textContent=`Destino seleccionado: ${e.detail.nombre}${e.detail.capital?` · Capital: ${e.detail.capital}`:""}`;emit('seleccionar-nodo',e.detail);
@@ -299,6 +318,33 @@ export function iniciarInterfaz() {
     resultPlayer=crearPanelReproduccion({contenedor:animation,visualizacion:resultGraph,escenario,ruta:resultado.mejorRuta,revision:data.revision,titulo:'Reproducción del recorrido óptimo',antesDeReproducir:pausarReproduccion});
     const links=node('div',undefined,'actions playback-links');links.append(alternatives,general);animation.append(links);announce('Resultado disponible para consultar.');
   }
+  function renderPlan(plan,nombres,resultados) {
+    if(!plan)return;
+    $('resultado-vacio').hidden=true;$('resultado-contenido').hidden=true;$('sin-ciclo').hidden=false;
+    $('contexto-correccion').textContent=resultados.estado==='vigente'?'No encontramos un recorrido completo. Completa las conexiones propuestas.':'El escenario cambió. El cálculo anterior ya no está vigente; este es tu plan de corrección.';
+    $('pesos-correccion').hidden=!plan.pendientes.length;
+    if(!busy&&resultados.estado!=='vigente')$('calculo-estado').textContent='Sin cálculo vigente. Puedes continuar con el plan de corrección y calcular al finalizar.';
+    const area=$('recomendaciones');area.replaceChildren();
+    if(resultados.estado==='vigente')area.append(node('p',`${resultados.valor.cantidadCandidatos} candidatas · 0 válidas`));
+    const stats=node('p',`${plan.total} recomendadas originalmente · ${plan.agregadas} agregadas · ${plan.pendientes.length} pendientes`,'repair-stats');stats.id='progreso-correccion';area.append(stats);
+    const progress=node('progress');progress.max=Math.max(1,plan.total);progress.value=plan.agregadas;progress.setAttribute('aria-label','Progreso de conexiones recomendadas');area.append(progress);
+    const warning=plan.minimoVigente?'Esta es una recomendación mínima. Puede haber otras alternativas con la misma cantidad de conexiones.':'Cambió la topología fuera del plan. Esta propuesta podría no ser el mínimo actual. Puedes actualizar las recomendaciones.';
+    area.append(node('p',warning,'small'));
+    if(!plan.garantizaRecorrido)area.append(node('p','Se eliminó una conexión del recorrido propuesto. Completar esta lista ya no garantiza el recorrido; actualiza las recomendaciones.','status-invalid'));
+    const list=node('ul');
+    for(const e of plan.pendientes){const li=node('li'),b=node('button',`${nombres[e.origen]} — ${nombres[e.destino]}: agregar`,'secondary');b.type='button';b.dataset.pendiente=`${e.origen}:${e.destino}`;b.disabled=busy;b.addEventListener('click',()=>openEditor(e,true));li.append(b);list.append(li);}
+    area.append(list);
+    if(!plan.pendientes.length)area.append(node('p','Has completado todas las conexiones recomendadas.','status-valid'));
+    const message=node('p','');message.id='mensaje-correccion';message.setAttribute('role','status');area.append(message);
+    const solve=node('button',plan.pendientes.length||!plan.garantizaRecorrido?'Actualizar recomendaciones':'Encontrar mejor recorrido','primary');solve.type='button';solve.id='resolver-correccion';solve.disabled=busy;solve.addEventListener('click',()=>emit('resolver'));area.append(solve);
+    all('#sin-ciclo [data-editor]').forEach(b=>b.disabled=busy);
+  }
+  function finalizarGuardado(mensaje) {
+    if(!editorDesdePlan)return;
+    dirty=false;volverAlPlan=true;
+    if($('mensaje-correccion'))$('mensaje-correccion').textContent=mensaje;
+    announce(mensaje);$('editor').close();
+  }
   function establecerPreferencias(p) {
     synchronizing=true;
     try {
@@ -377,6 +423,6 @@ export function iniciarInterfaz() {
   $('cancelar-calculo').addEventListener('click',()=>emit('cancelar-calculo'));
   $('saltar-pagina').addEventListener('submit',e=>{e.preventDefault();if(!pageInfo)return;const n=Number($('numero-pagina').value);if(Number.isInteger(n)&&n>=1&&n<=Math.ceil(pageInfo.total/100))emit('pagina',{inicio:(n-1)*100,limite:100});});
   validateQuantity();updateSelection();
-  return {pausarReproduccion,renderCalculo,renderProgreso,renderDetalle,renderExplicacion,mensajeConsulta,irA,renderEscenario,renderMatrices,renderPagina,renderResultado,abrirEditor:openEditor,obtenerPreferencias:preferences,
+  return {renderPlan,finalizarGuardado,pausarReproduccion,renderCalculo,renderProgreso,renderDetalle,renderExplicacion,mensajeConsulta,irA,renderEscenario,renderMatrices,renderPagina,renderResultado,abrirEditor:openEditor,obtenerPreferencias:preferences,
     establecerPreferencias,renderEdicion,aplicarSugerencias,mensajeEdicion,mensajeEscenario,invalidarResultados,renderEstado};
 }

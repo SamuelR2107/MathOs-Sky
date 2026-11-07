@@ -1,5 +1,7 @@
 # Publicación de MathOs-Sky
 
+> Esta versión incorpora diagnóstico progresivo y validación de pesos manuales. El despliegue usa el workflow existente al actualizar main.
+
 Sitio publicado: https://samuelr2107.github.io/MathOs-Sky/
 
 Repositorio: https://github.com/SamuelR2107/MathOs-Sky. Rama: main. GitHub Actions completó la generación y el despliegue.
@@ -16,7 +18,7 @@ node scripts/preparar-publicacion.js
 node scripts/verificar-publicacion.js
 ```
 
-El sitio generado contiene 21 archivos: index.html, .nojekyll, css/style.css y 18 módulos js/. El verificador rechaza archivos adicionales, enlaces simbólicos, recursos faltantes, diferencias respecto al fuente y referencias locales. No elimina archivos inesperados automáticamente. No abrir mediante file://; los módulos y el Worker requieren HTTP/HTTPS.
+El sitio generado contiene 22 archivos: index.html, .nojekyll, css/style.css y 19 módulos js/. El verificador rechaza archivos adicionales, enlaces simbólicos, recursos faltantes, diferencias respecto al fuente y referencias locales. No elimina archivos inesperados automáticamente. No abrir mediante file://; los módulos y el Worker requieren HTTP/HTTPS.
 
 ## GitHub Actions
 
@@ -28,7 +30,7 @@ Repositorio público SamuelR2107/MathOs-Sky, rama main, Pages con origen GitHub 
 
 ## Verificación de producción
 
-El 6 de noviembre de 2026 se ejecutaron en Edge los flujos reales de la URL pública: automático 5/7/10, manual y edición de conexiones, matrices, TSP y Worker, resultados, candidatas, diagnóstico, avión y cancelación. Sin errores de consola ni recursos HTTP fallidos. Los siete anchos responsive son emulados; no equivalen a pruebas en móviles físicos. Las 109 pruebas Node también aprobaron en GitHub Actions.
+El 6 de noviembre de 2026 se ejecutaron en Edge los flujos reales de la URL pública: automático 5/7/10, manual y edición de conexiones, matrices, TSP y Worker, resultados, candidatas, diagnóstico, avión y cancelación. Sin errores de consola ni recursos HTTP fallidos. Los siete anchos responsive son emulados; no equivalen a pruebas en móviles físicos. Esa publicación inicial aprobó 109 pruebas Node. La versión consolidada amplía la batería a 133 pruebas; su despliegue debe superar nuevamente el workflow.
 
 
 Un repositorio público permite consultar y descargar sus fuentes, pruebas y fixtures matemáticos. Estos últimos NO se copian al sitio público. No confundir la privacidad del repositorio con el contenido del artifact.

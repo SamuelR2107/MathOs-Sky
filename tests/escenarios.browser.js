@@ -35,18 +35,18 @@ try {
  assert.deepEqual(await page.locator('#origen option:not([value=""])').allTextContents(),['Lima','Ica','Arequipa','Cusco','Ayacucho']);
  checks.push('Manual5: selección exacta, IDs locales y grafo vacío');
  await click('#abrir-editor');await page.locator('#desde').selectOption('0');assert.ok(await page.locator('#hasta option[value="0"]').isDisabled());await page.locator('#hasta').selectOption('1');
- await click('#guardar-conexion');assert.match(await page.locator('#error-distancia').textContent(),/positiva/);assert.equal((await state()).grafo.aristas.length,0);
+ await click('#guardar-conexion');assert.match(await page.locator('#error-distancia').textContent(),/positivo/);assert.equal((await state()).grafo.aristas.length,0);
  for(const bad of ['0','-1','']){
   await page.locator('#distancia').fill(bad);await page.locator('#tiempo').fill('270');await page.locator('#costo').fill('70');await click('#guardar-conexion');assert.equal((await state()).grafo.aristas.length,0);
  }
- await page.locator('#distancia').fill('305');await click('#guardar-conexion');s=await state();assert.deepEqual(s.grafo.aristas,[[0,1,305,270,70]]);assert.match(await page.locator('#editor-valid').textContent(),/agregada/);
+ await page.locator('#distancia').fill('305');confirm(true);await click('#guardar-conexion');s=await state();assert.deepEqual(s.grafo.aristas,[[0,1,305,270,70]]);assert.match(await page.locator('#editor-valid').textContent(),/agregada/);
  await click('#cancelar-editor');assert.equal(await page.locator('.connection-item').count(),1);
  await click('nav a[href="#explorar"]');await click('[data-tab=matrices]');
  for(const [type,value] of [['adyacencia','1'],['distancia','305'],['tiempo','270'],['costo','70']]){
   await page.locator('#tipo-matriz').selectOption(type);const rows=page.locator('.matrix tbody tr');assert.equal(await rows.nth(0).locator('td').nth(1).textContent(),value);assert.equal(await rows.nth(1).locator('td').nth(0).textContent(),value);assert.equal(await rows.nth(0).locator('td').nth(0).textContent(),'0');
  }
  checks.push('Agregar Lima-Ica: cuatro matrices simétricas; pesos inválidos y lazos rechazados');
- await click('nav a[href="#planificar"]');await click('.connection-item');await page.locator('#distancia').fill('123.456789');await page.locator('#tiempo').fill('111.25');await page.locator('#costo').fill('66.75');await click('#guardar-conexion');s=await state();assert.equal(s.grafo.aristas[0][2],123.456789);await click('#cancelar-editor');
+ await click('nav a[href="#planificar"]');await click('.connection-item');await page.locator('#distancia').fill('123.456789');await page.locator('#tiempo').fill('111.25');await page.locator('#costo').fill('66.75');confirm(true);await click('#guardar-conexion');s=await state();assert.equal(s.grafo.aristas[0][2],123.456789);await click('#cancelar-editor');
  await click('#abrir-editor');await page.locator('#desde').selectOption('1');await page.locator('#hasta').selectOption('0');assert.equal(await page.locator('#distancia').inputValue(),'123.456789');assert.equal(await page.locator('#guardar-conexion').textContent(),'Guardar cambios');assert.equal((await state()).grafo.aristas.length,1);
  const beforeSuggestion=await state();confirm(false);await click('#usar-modelo');assert.equal(await page.locator('#distancia').inputValue(),'123.456789');assert.deepEqual(await state(),beforeSuggestion);
  confirm(true);await click('#usar-modelo');const d=Number(await page.locator('#distancia').inputValue());assert.ok(Math.abs(d-265.03989705153657)<1e-9);assert.deepEqual(await state(),beforeSuggestion);await click('#guardar-conexion');assert.equal((await state()).grafo.aristas[0][2],d);

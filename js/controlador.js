@@ -6,10 +6,11 @@ export function conectarEscenarios(interfaz) {
   const estado=new EstadoEscenario();
   let borrador=interfaz.obtenerPreferencias();
   const calculo=new CalculoTSP({leer:()=>estado.leer(),notificar:m=>{
-    if(m.tipo==='estado')interfaz.renderCalculo({...m,activo:estado.activo});
+    if(m.tipo==='estado'){interfaz.renderCalculo({...m,activo:estado.activo});mostrarPlan();}
     else if(m.tipo==='progreso')interfaz.renderProgreso(m);
     else if(m.tipo==='resultado') {
       if(!estado.registrarResultado(m.resultado,m.revision))return;
+      estado.registrarPlan(m.resultado.cantidadCiclosValidos?null:m.diagnostico,m.revision);
       const escenario=estado.obtenerVista(), nombres=escenario.nodos.map(n=>n.nombre), s=estado.leer();
       const totales={Distancia:0,Tiempo:0,Costo:0};
       const ruta=m.resultado.mejorRuta;
@@ -18,6 +19,7 @@ export function conectarEscenarios(interfaz) {
         for(const k of Object.keys(totales))totales[k]+=e[k.toLowerCase()];
       }
       interfaz.renderResultado({resultado:m.resultado,diagnostico:m.diagnostico,sinCiclo:!m.resultado.cantidadCiclosValidos,nombres,metrica:s.metrica,escenario,totales,revision:s.revision});
+      mostrarPlan();
       interfaz.renderExplicacion({...s,resultado:m.resultado,nombres});interfaz.irA('recorrido');
     }else if(m.tipo==='pagina')interfaz.renderPagina({...m,total:estado.leer().resultados.valor.cantidadCandidatos,nombres:estado.obtenerVista().nodos.map(n=>n.nombre),metrica:estado.leer().metrica,revision:estado.revision});
     else if(m.tipo==='detalle')interfaz.renderDetalle({...m,escenario:estado.obtenerVista(),metrica:estado.leer().metrica,revision:estado.revision});
@@ -38,6 +40,9 @@ export function conectarEscenarios(interfaz) {
     interfaz.renderExplicacion({...estado.leer(),nombres:estado.obtenerVista()?.nodos.map(n=>n.nombre)});
     if(estado.activo)interfaz.mensajeEscenario('Tu escenario se conserva en esta página. Vuelve a calcular para consultar sus recorridos.');
   });
+  function mostrarPlan() {
+    interfaz.renderPlan(estado.obtenerPlan(),estado.obtenerVista()?.nodos.map(n=>n.nombre)??[],estado.leer().resultados);
+  }
   function actualizar() {
     interfaz.renderEscenario(estado.obtenerVista());
     interfaz.renderMatrices(estado.obtenerMatrices());
@@ -95,6 +100,8 @@ export function conectarEscenarios(interfaz) {
   on('guardar-conexion',datos=>error(()=>{
     const mensaje=estado.guardarConexion(datos);actualizar();
     interfaz.renderEdicion(estado.prepararEdicion(datos.origen,datos.destino));interfaz.mensajeEdicion(mensaje);
+    const plan=estado.obtenerPlan();
+    interfaz.finalizarGuardado(plan?`${mensaje} ${plan.pendientes.length?`Aún quedan ${plan.pendientes.length} conexiones por completar.`:'Has completado todas las conexiones recomendadas.'}`:mensaje);
   },true));
   on('eliminar-conexion',()=>error(()=>{
     estado.eliminarConexion();actualizar();const e=estado.leer().edicion;

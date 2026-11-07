@@ -1,5 +1,7 @@
 # MathOs-Sky Web
 
+> Versión consolidada: diagnóstico progresivo y validación de pesos manuales. Las recomendaciones se completan sin abandonar el diagnóstico y los valores atípicos requieren confirmación.
+
 **Aplicación pública:** https://samuelr2107.github.io/MathOs-Sky/
 
 Abre el enlace para utilizarla sin instalar Node ni descargar archivos.
@@ -85,3 +87,17 @@ Verificación:105 pruebas (91 anteriores intactas +14 nuevas). Edge real con tam
 ## Auditoría final
 
 Consultar PUBLICACION.md; el informe de auditoría se conserva en la copia de desarrollo. Se ejecutaron 109 pruebas Node y regresiones de navegador. Para repetir la auditoría estática: `node tests/auditoria.browser.js` (requiere PLAYWRIGHT_MODULE y Edge; BROWSER_CHANNEL=chrome selecciona Chrome).
+
+## Revisión consolidada de mejoras manuales
+
+Consultar INFORME_MEJORAS_MANUAL_FINAL.md y PR_MEJORAS_MANUAL.md. Las 133 pruebas Node conservan los fixtures matemáticos originales. La política de pesos del formulario no se aplica al motor interno.
+
+Con PLAYWRIGHT_MODULE apuntando a Playwright y Microsoft Edge instalado:
+
+```sh
+node tests/diagnosticoInteractivo.browser.js
+node tests/pesosManuales.browser.js
+node tests/integracionManual.browser.js
+```
+
+La última prueba genera y sirve exclusivamente publicacion/ bajo /MathOs-Sky/ y ejecuta los 25 pasos integrados en escritorio y móvil emulado. Los tests cierran sus navegadores y servidores al terminar. `tests/interfaz.browser.js` es un alias de escenarios.browser.js.

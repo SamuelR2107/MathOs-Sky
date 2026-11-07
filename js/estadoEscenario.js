@@ -17,6 +17,8 @@ export class EstadoEscenario {
   #edicion = null;
   #resultados = {estado:'sin-calculo', revision:null, valor:null};
   #semilla = null;
+  #plan = null;
+  #escenario = 0;
 
   get activo() { return this.#grafo !== null; }
   get revision() { return this.#revision; }
@@ -26,6 +28,7 @@ export class EstadoEscenario {
   }
   #requiereGrafo() { if(!this.#grafo) throw new Error('Crea un escenario antes de gestionar conexiones.'); }
   #instalar(grafo, ids, modo, semilla) {
+    this.#escenario++;this.#plan=null;
     this.#grafo=grafo;this.#ids=[...ids];this.#modo=modo;this.#semilla=semilla;
     this.#origen=0;this.#edicion=null;this.#mutacion();
   }
@@ -44,6 +47,7 @@ export class EstadoEscenario {
   cambiarModo(modo) {
     if(!['manual','automatico'].includes(modo))throw new Error('Modo inválido.');
     if(modo===this.#modo)return;
+    this.#plan=null;this.#escenario++;
     this.#modo=modo;this.#grafo=null;this.#ids=[];this.#origen=null;this.#edicion=null;this.#semilla=null;this.#mutacion();
   }
   personalizar() {
@@ -79,6 +83,7 @@ export class EstadoEscenario {
     const operacion=e.existente?'modificarConexion':'agregarConexion';
     const resultado=EntradaManual[operacion](this.#grafo,origen,destino,distancia,tiempo,costo);
     if(!resultado.valido)throw new Error(resultado.mensaje);
+    if(this.#plan&&!e.existente&&!this.#plan.conexiones.some(p=>p.origen===Math.min(origen,destino)&&p.destino===Math.max(origen,destino)))this.#plan.minimoVigente=false;
     this.#mutacion();this.prepararEdicion(origen,destino);
     return e.existente?'Conexión actualizada.':'Conexión agregada.';
   }
@@ -87,6 +92,7 @@ export class EstadoEscenario {
     if(!e?.existente||e.revision!==this.#revision)throw new Error('Selecciona una conexión existente.');
     const resultado=EntradaManual.eliminarConexion(this.#grafo,e.origen,e.destino);
     if(!resultado.valido)throw new Error(resultado.mensaje);
+    if(this.#plan)this.#plan.minimoVigente=false;
     this.#mutacion();this.prepararEdicion(e.origen,e.destino);
   }
   descartarResultado() { this.#resultados={estado:'sin-calculo',revision:null,valor:null}; }
@@ -95,9 +101,33 @@ export class EstadoEscenario {
     if(!this.activo||revision!==this.#revision)return false;
     this.#resultados={estado:'vigente',revision,valor:structuredClone(valor)};return true;
   }
+  /** Conserva una propuesta topológica, nunca un resultado TSP obsoleto.
+   * Agregar solo aristas del mínimo original conserva su minimalidad:
+   * cualquier solución nueva de k aristas daría una original de k + agregadas.
+   * Otras altas/bajas requieren reevaluar el mínimo; no se ejecuta TSP aquí. */
+  registrarPlan(diagnostico,revision) {
+    if(!this.activo||revision!==this.#revision)return false;
+    if(!diagnostico){this.#plan=null;return true;}
+    const conexiones=[...new Map(diagnostico.conexionesFaltantes.map(e=>{
+      const origen=Math.min(e.origen,e.destino),destino=Math.max(e.origen,e.destino);
+      return [`${origen}:${destino}`,{origen,destino}];
+    })).values()];
+    this.#plan={escenario:this.#escenario,revisionInicial:revision,ruta:[...diagnostico.rutaCandidata],conexiones,minimoVigente:true};
+    return true;
+  }
+  obtenerPlan() {
+    const p=this.#plan;if(!p||p.escenario!==this.#escenario||!this.#grafo)return null;
+    const pendientes=p.conexiones.filter(e=>!this.#grafo.existeConexion(e.origen,e.destino));
+    const adicionales=[];
+    for(let i=1;i<p.ruta.length;i++){
+      const origen=Math.min(p.ruta[i-1],p.ruta[i]),destino=Math.max(p.ruta[i-1],p.ruta[i]);
+      if(!this.#grafo.existeConexion(origen,destino)&&!p.conexiones.some(e=>e.origen===origen&&e.destino===destino))adicionales.push({origen,destino});
+    }
+    return structuredClone({...p,pendientes,adicionales,total:p.conexiones.length,agregadas:p.conexiones.length-pendientes.length,garantizaRecorrido:adicionales.length===0});
+  }
   leer() {
     return {modo:this.#modo,idsGeograficos:[...this.#ids],origen:this.#origen,metrica:this.#metrica,revision:this.#revision,
-      semilla:this.#semilla,grafo:this.#grafo?.toJSON()??null,edicion:this.#edicion?{...this.#edicion}:null,resultados:structuredClone(this.#resultados)};
+      planCorreccion:this.obtenerPlan(),semilla:this.#semilla,grafo:this.#grafo?.toJSON()??null,edicion:this.#edicion?{...this.#edicion}:null,resultados:structuredClone(this.#resultados)};
   }
   obtenerVista() {
     if(!this.#grafo)return null;

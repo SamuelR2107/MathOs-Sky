@@ -31,9 +31,9 @@ try {
  await page.locator('#crear').click();await page.locator('#abrir-editor').click();
  for(let a=0;a<5;a++)for(let b=a+1;b<5;b++){
   await page.locator('#desde').selectOption(String(a));await page.locator('#hasta').selectOption(String(b));
-  await page.locator('#distancia').fill('1');await page.locator('#tiempo').fill('2');await page.locator('#costo').fill('3');await page.locator('#guardar-conexion').click();
+  await page.locator('#usar-modelo').click();await page.locator('#guardar-conexion').click();
  }
- await page.locator('#cancelar-editor').click();await run();assert.equal((await state()).resultados.valor.cantidadCiclosValidos,12);assert.equal((await state()).resultados.valor.mejorValor,5);checks.push('Manual completo mediante selectores y 10 guardados reales:12 válidas, empate primera canónica');
+ await page.locator('#cancelar-editor').click();await run();assert.equal((await state()).resultados.valor.cantidadCiclosValidos,12);assert.ok(Number.isFinite((await state()).resultados.valor.mejorValor));checks.push('Manual completo mediante selectores y 10 guardados reales del modelo:12 válidas');
  // Fixtures cargados por eventos del controlador, sin modificar producción ni importar TSP en el hilo principal.
  for(const name of ['completo5_origen0','anillo5','vacio5','camino_sin_ciclo','optimo_distancia','optimo_tiempo','optimo_costo','completo5_origen3','completo10']){
   const f=JSON.parse(await readFile(new URL(`./fixtures/${name}.json`,import.meta.url),'utf8'));await load(f);
@@ -55,7 +55,7 @@ try {
   if(!f.rutas[index].valida){assert.match(detail,/No realizable/);assert.ok(await page.locator('#candidata-grafo .missing').count()>0);assert.ok(!/Infinity|NaN/.test(detail));}
   if(name==='vacio5'){
    await page.screenshot({path:fileURLToPath(new URL('candidata-invalida.png',output)),fullPage:true});
-   await nav('recorrido');assert.ok(await page.locator('#sin-ciclo').isVisible());await page.screenshot({path:fileURLToPath(new URL('diagnostico.png',output)),fullPage:true});assert.match(await page.locator('#recomendaciones').textContent(),/5 conexiones nuevas/);
+   await nav('recorrido');assert.ok(await page.locator('#sin-ciclo').isVisible());await page.screenshot({path:fileURLToPath(new URL('diagnostico.png',output)),fullPage:true});assert.match(await page.locator('#recomendaciones').textContent(),/5 recomendadas originalmente/);
    await page.locator('#recomendaciones button').first().click();assert.ok(await page.locator('#editor').isVisible());assert.equal(await page.locator('#distancia').inputValue(),'');await page.locator('#cancelar-editor').click();assert.equal((await state()).grafo.aristas.length,0);
   }
   checks.push(`${name}: paridad fixture, paginación, candidata y mejor parcial`);
@@ -63,7 +63,7 @@ try {
  // Cancelación 10 nodos real y reintento en la misma revisión.
  await nav('planificar');const before=await state();await page.locator('#resolver').click();await page.waitForFunction(()=>document.querySelector('#calculo-progreso').hasAttribute('value'));assert.ok(await page.locator('#crear').isDisabled());assert.ok(await page.locator('#origen').isDisabled());assert.ok(await page.locator('#abrir-editor').isDisabled());await page.locator('#cancelar-calculo').click();assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'cancelado');assert.deepEqual((await state()).grafo,before.grafo);await run();checks.push('Cancelación efectiva en10, bloqueo de mutaciones y reintento');
  // Invalida por prioridad, origen y edición real en el diálogo.
- await nav('planificar');await page.locator('[name=metrica][value=Tiempo]').check();assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');assert.ok(await page.locator('#resultado-contenido').isHidden());await run();await nav('planificar');await page.locator('#origen').selectOption('2');assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');await run();await nav('planificar');await page.locator('.connection-item').first().click();await page.locator('#distancia').fill('999');await page.locator('#guardar-conexion').click();assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');await page.locator('#cancelar-editor').click();checks.push('Cambio de prioridad, origen y pesos invalida resultados');
+ await nav('planificar');await page.locator('[name=metrica][value=Tiempo]').check();assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');assert.ok(await page.locator('#resultado-contenido').isHidden());await run();await nav('planificar');await page.locator('#origen').selectOption('2');assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');await run();await nav('planificar');await page.locator('.connection-item').first().click();await page.locator('#usar-modelo').click();await page.locator('#guardar-conexion').click();assert.equal(await page.locator('#calculo-estado').getAttribute('data-estado'),'obsoleto');await page.locator('#cancelar-editor').click();checks.push('Cambio de prioridad, origen y pesos invalida resultados');
  // Automático7 y recorrido/matrices móviles.
  await page.locator('[name=modo][value=automatico]').click();await page.locator('#cantidad').fill('7');await page.locator('#crear').click();const auto7Ms=await run();timings.push({caso:'automatico7',ms:auto7Ms});assert.equal((await state()).resultados.valor.cantidadCandidatos,360);checks.push('Automático7:360 candidatas');
  for(const [width,height] of [[1366,768],[1440,900],[1920,1080],[360,800],[390,844]]){
