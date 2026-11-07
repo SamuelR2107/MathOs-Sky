@@ -33,3 +33,9 @@ test('formulario: Lima-Ica acepta300/450, advierte800 y rechaza extremos',()=>{
  for(const d of [300,450])assert.equal(evaluar({...r,distancia:d},r).nivel,'habitual');assert.equal(evaluar({...r,distancia:800},r).nivel,'atipico');for(const d of [.001,100000])assert.equal(evaluar({...r,distancia:d},r).nivel,'invalido');
 });
 test('formulario: restricciones no redefinen Grafo ni EntradaManual matemáticos',()=>{const g=new Grafo(5);assert.equal(EntradaManual.agregarConexion(g,0,1,1e-7,1,999999999).valido,true);assert.equal(g.obtenerPeso(1,0,'Distancia'),1e-7);});
+
+test('formulario: mensajes breves sin perder clasificación ni referencia numérica',()=>{
+ for(const [key,l] of Object.entries(L))for(const value of ['',100*l.permitidoMin-1,100*l.permitidoMax]){
+  const c=evaluar({...ref,[key]:value},ref).campos[key];assert.ok(c.mensaje.length<115);assert.equal(c.referencia,100);assert.ok(Number.isFinite(c.minimo));assert.ok(Number.isFinite(c.maximo));
+ }
+});
