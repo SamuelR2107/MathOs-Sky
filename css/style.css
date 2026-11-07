@@ -67,3 +67,14 @@ dialog{padding:0;border:0;border-left:1px solid var(--border);height:100dvh;max-
 
 /* Advertencias de uso: valores permitidos que necesitan confirmación. */
 .field-warning{color:#854d0e!important;white-space:normal}
+
+/* Editor: referencias visibles sin rellenar ni guardar automáticamente. */
+.suggested-weights{margin-top:20px;padding:14px;background:#edf3fc;border-radius:10px;color:var(--ink)}
+.suggested-weights>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
+.suggested-weights span{font-size:12px}.suggested-weights output{display:block;font-weight:650;font-size:14px;font-variant-numeric:tabular-nums}.suggested-weights small{font-size:11px}
+.connection-editable .node{touch-action:none;user-select:none;cursor:crosshair}
+.connection-preview{stroke:var(--blue);stroke-width:3;stroke-dasharray:6 4;pointer-events:none;vector-effect:non-scaling-stroke}
+.node.connection-source circle{stroke:var(--blue);stroke-width:4}
+.node.connection-target circle{fill:#e1f5eb;stroke:var(--success);stroke-width:4}
+
+.connection-editable .svg-graph{touch-action:none}

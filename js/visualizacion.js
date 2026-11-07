@@ -17,7 +17,7 @@ export class Visualizacion {
     this.container = container;
     this.empty = container.innerHTML;
     this.data = null;this.disposed=false;
-    this.selected = null;
+    this.selected = null;this.editable=false;this.gesture=null;
     this.width = 0;this.reproduccion=null;this.positions=new Map();this.lines=new Map();this.nodeGroups=new Map();this.plane=null;this.styleKey=null;
     this.observer = new ResizeObserver(entries => {
       const width = Math.round(entries[0].contentRect.width);
@@ -26,7 +26,75 @@ export class Visualizacion {
     this.observer.observe(container);
   }
   render(data) { this.data = data ? structuredClone(data) : null; this.selected = null; this.reproduccion=null;this.draw(); }
-  destroy() { this.disposed=true;this.observer.disconnect(); this.container.replaceChildren(); }
+  destroy() { this.cancelarConexion();this.disposed=true;this.observer.disconnect(); this.container.replaceChildren(); }
+  permitirConexiones(valor) {
+    this.editable=!!valor;
+    if(!this.editable)this.cancelarConexion();
+    this.container.classList.toggle('connection-editable',this.editable);
+  }
+  avisarConexion(texto){this.container.dispatchEvent(new CustomEvent('conexion-aviso',{bubbles:true,detail:texto}));}
+  cancelarConexion() {
+    const g=this.gesture;this.gesture=null;
+    if(g?.pointer!==undefined&&g.capture.hasPointerCapture(g.pointer))g.capture.releasePointerCapture(g.pointer);
+    this.preview?.remove();this.preview=null;
+    for(const node of this.nodeGroups.values())node.classList.remove('connection-source','connection-target');
+  }
+  iniciarConexion(id,svg) {
+    this.cancelarConexion();const p=this.positions.get(id);
+    this.gesture={origen:id,svg};
+    this.nodeGroups.get(id).classList.add('connection-source');
+    this.preview=svgElement('line',{x1:p.x,y1:p.y,x2:p.x,y2:p.y,class:'connection-preview','aria-hidden':'true'});
+    svg.append(this.preview);
+  }
+  destinoConexion(id) {
+    for(const [n,group] of this.nodeGroups)group.classList.toggle('connection-target',n===id&&n!==this.gesture?.origen);
+    return id!==null&&id!==undefined&&id!==this.gesture?.origen&&this.positions.has(id);
+  }
+  abrirConexion(id) {
+    const origen=this.gesture.origen;this.cancelarConexion();
+    this.nodeGroups.get(origen)?.focus();
+    this.container.dispatchEvent(new CustomEvent('solicitar-conexion',{bubbles:true,detail:{origen,destino:id}}));
+  }
+  teclaConexion(id) {
+    if(!this.gesture){this.iniciarConexion(id,this.container.querySelector('svg'));this.avisarConexion('Origen elegido. Usa Tab y Enter o Espacio en otro destino. Escape cancela.');}
+    else if(this.destinoConexion(id))this.abrirConexion(id);
+    else this.avisarConexion('Elige un destino distinto del origen.');
+  }
+  configurarConexiones(svg) {
+    const nodo=e=>{const n=e?.closest?.('.node');return n&&svg.contains(n)?Number(n.dataset.node):null;};
+    const destino=e=>nodo(document.elementFromPoint(e.clientX,e.clientY));
+    svg.addEventListener('pointerdown',e=>{
+      if(!this.editable||e.button!==0||!e.isPrimary)return;
+      const id=nodo(e.target);if(id===null)return;
+      this.suppressClick=false;this.iniciarConexion(id,svg);
+      Object.assign(this.gesture,{pointer:e.pointerId,capture:this.nodeGroups.get(id),x:e.clientX,y:e.clientY,moved:false});
+      this.gesture.capture.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove',e=>{
+      const g=this.gesture;if(!g||g.pointer!==e.pointerId)return;
+      g.moved ||= Math.hypot(e.clientX-g.x,e.clientY-g.y)>6;
+      if(!g.moved)return;
+      const matrix=svg.getScreenCTM();if(!matrix)return;
+      const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
+      this.preview.setAttribute('x2',p.x);this.preview.setAttribute('y2',p.y);
+      this.destinoConexion(destino(e));
+    });
+    svg.addEventListener('pointerup',e=>{
+      const g=this.gesture;if(!g||g.pointer!==e.pointerId)return;
+      this.suppressClick=g.moved;
+      const id=destino(e);
+      if(g.moved&&this.destinoConexion(id))this.abrirConexion(id);
+      else this.cancelarConexion();
+    });
+    for(const event of ['pointercancel','lostpointercapture'])svg.addEventListener(event,()=>this.cancelarConexion());
+    svg.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.gesture){e.preventDefault();this.cancelarConexion();this.avisarConexion('Conexión cancelada.');}});
+    svg.addEventListener('focusin',e=>{
+      if(!this.gesture||this.gesture.pointer!==undefined)return;
+      const id=nodo(e.target),p=this.positions.get(id);
+      if(p){this.preview.setAttribute('x2',p.x);this.preview.setAttribute('y2',p.y);this.destinoConexion(id);}
+    });
+    svg.addEventListener('focusout',e=>{if(this.gesture?.pointer===undefined&&!svg.contains(e.relatedTarget))this.cancelarConexion();});
+  }
   actualizarReproduccion(s) {
     this.reproduccion=s;
     if(!this.plane)return;this.plane.removeAttribute('visibility');
@@ -46,6 +114,7 @@ export class Visualizacion {
     }
   }
   draw() {
+    this.cancelarConexion();
     if(this.disposed)return;
     if (!this.data?.nodos?.length) { this.container.innerHTML = this.empty; return; }
     const {nodos, conexiones = [], ruta = [], faltantes = [], origen} = this.data;
@@ -67,8 +136,8 @@ export class Visualizacion {
         svg.querySelectorAll('[aria-pressed]').forEach(e => e.setAttribute('aria-pressed', String(e === element)));
         this.container.dispatchEvent(new CustomEvent(eventName, {bubbles:true, detail:structuredClone(detail)}));
       };
-      element.addEventListener('click', act);
-      element.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+      element.addEventListener('click', e=>{if(this.suppressClick){this.suppressClick=false;e.preventDefault();return;}act();});
+      element.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault();if(e.repeat)return;act();if(this.editable&&eventName==='seleccionar-nodo')this.teclaConexion(detail.id); } });
     };
     for (const edge of [...conexiones.map(e => ({...e, missing:false})), ...faltantes.map(e => ({...e, missing:true}))]) {
       const a = positions.get(edge.origen), b = positions.get(edge.destino);
@@ -99,6 +168,7 @@ export class Visualizacion {
       svg.append(this.plane);
     }
     this.container.replaceChildren(svg);
+    this.configurarConexiones(svg);
     if(this.reproduccion)this.actualizarReproduccion(this.reproduccion);
     else if(this.plane)this.plane.setAttribute('visibility','hidden');
   }

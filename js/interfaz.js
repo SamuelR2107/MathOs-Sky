@@ -25,7 +25,7 @@ export function iniciarInterfaz() {
   const preferences = () => ({modo:mode,idsDepartamentos:[...selected],cantidadNodos:Number($('cantidad').value),garantizarCicloHamiltoniano:$('garantia').checked,origen:$('origen').value,metrica:document.querySelector('[name=metrica]:checked').value});
 
   function navigate(focus=false) {
-    pausarReproduccion();
+    pausarReproduccion();graph.cancelarConexion();
     const id=location.hash.slice(1);
     const page=['planificar','recorrido','explorar','modelo'].includes(id)?id:'planificar';
     all('.page').forEach(s=>{s.hidden=s.id!==page;});
@@ -124,6 +124,12 @@ export function iniciarInterfaz() {
   function requestPair() {
     const {origen,destino}=editorValues();
     const valid=origen!==null&&destino!==null&&origen!==destino;
+    $('pesos-sugeridos').hidden=!valid;
+    if(valid){
+      const a=graphData.nodos.find(n=>n.id===origen),b=graphData.nodos.find(n=>n.id===destino);
+      const {campos}=evaluarPesosEntreDepartamentos({},a.idGeografico,b.idGeografico);
+      for(const [k,c] of Object.entries(campos)){const el=$(`sugerencia-${k}`);el.textContent=`${format(c.referencia)} ${units[k]}`;el.title=String(c.referencia);$(k).setAttribute('aria-describedby',`sugerencia-${k} error-${k}`);}
+    }
     $('usar-modelo').disabled=$('guardar-conexion').disabled=!valid;
     $('eliminar-conexion').disabled=true;
     if(valid)emit('editar-par',{origen,destino});
@@ -173,7 +179,7 @@ export function iniciarInterfaz() {
     const a=graphData.nodos.find(n=>n.id===extremos.origen),b=graphData.nodos.find(n=>n.id===extremos.destino);
     const evaluacion=evaluarPesosEntreDepartamentos(Object.fromEntries(['distancia','tiempo','costo'].map(k=>[k,$(k).value])),a.idGeografico,b.idGeografico);
     for(const [id,campo] of Object.entries(evaluacion.campos)){
-      $(id).setAttribute('aria-invalid',String(campo.nivel==='invalido'));$(id).setAttribute('aria-describedby',`error-${id}`);
+      $(id).setAttribute('aria-invalid',String(campo.nivel==='invalido'));$(id).setAttribute('aria-describedby',`sugerencia-${id} error-${id}`);
       $(`error-${id}`).textContent=campo.mensaje;$(`error-${id}`).classList.toggle('field-warning',campo.nivel==='atipico');
       if(campo.nivel==='invalido')first??=$(id);
     }
@@ -185,8 +191,8 @@ export function iniciarInterfaz() {
       emit('borrador-validado',{...extremos,nivel:evaluacion.nivel});return;
     }
     if(evaluacion.nivel==='atipico'){
-      const detalles=Object.values(evaluacion.campos).filter(c=>c.nivel==='atipico').map(c=>c.mensaje).join('\n\n');
-      if(!window.confirm(`${detalles}\n\nSon referencias académicas, no tarifas ni tiempos comerciales. ¿Guardar los valores personalizados sin cambiarlos?`)){
+      const detalles=Object.entries(evaluacion.campos).filter(([,c])=>c.nivel==='atipico').map(([k,c])=>`${k}: ${format(c.valor)} ${units[k]} (sugerido: ${format(c.referencia)})`).join('\n');
+      if(!window.confirm(`${detalles}\n\n¿Guardar los valores personalizados sin cambiarlos?`)){
         $('editor-valid').textContent='No se guardaron cambios. Revisa los valores inusuales.';return;
       }
     }
@@ -212,6 +218,8 @@ export function iniciarInterfaz() {
     $('editor-error').textContent=error?mensaje:'';$('editor-valid').textContent=error?'':mensaje;
     if(!error){dirty=false;$('editor-valid').classList.remove('field-warning');}announce(mensaje);
   }
+  $('grafo-plan').addEventListener('solicitar-conexion',e=>{if(mode==='manual'&&!busy)openEditor(e.detail);});
+  $('grafo-plan').addEventListener('conexion-aviso',e=>announce(e.detail));
   $('grafo-plan').addEventListener('seleccionar-nodo',e=>{
     $('graph-context').hidden=false;$('graph-context').textContent=`Destino seleccionado: ${e.detail.nombre}${e.detail.capital?` · Capital: ${e.detail.capital}`:""}`;emit('seleccionar-nodo',e.detail);
   });
@@ -370,7 +378,11 @@ export function iniciarInterfaz() {
     $('anterior').disabled=$('siguiente').disabled=true;$('detalle-ruta').hidden=true;
     $('route-count').textContent='Sin cálculo';$('pagina-info').textContent='Sin páginas disponibles';pageInfo=null;
   }
-  function renderEstado({modo:actualMode}) {$('personalizar').hidden=!graphData||actualMode!=='automatico';}
+  function renderEstado({modo:actualMode}) {
+    $('personalizar').hidden=!graphData||actualMode!=='automatico';
+    graph.permitirConexiones(actualMode==='manual'&&!busy);
+    $('editor-disponible').textContent=graphData&&actualMode==='manual'?'Arrastra entre destinos o usa Enter/Espacio en origen y destino. Escape cancela. También puedes usar Gestionar conexiones.':graphData?'Selecciona una conexión o personaliza el escenario para conectar destinos.':'Crea un escenario para habilitar el editor.';
+  }
   function irA(id){history.pushState(null,'',`#${id}`);navigate(true);window.scrollTo(0,0);}
   function renderCalculo({estado,activo,mensaje}) {
     const calculating=estado==='calculando';
@@ -378,7 +390,7 @@ export function iniciarInterfaz() {
       blocked=all('.configuration input,.configuration button,.configuration select,#abrir-editor,#personalizar,.connection-item,#conexion-form input,#conexion-form select,#conexion-form button').filter(e=>e.id!=='cancelar-calculo').map(e=>[e,e.disabled]);
       blocked.forEach(([e])=>e.disabled=true);
     }else if(!calculating&&busy){blocked.forEach(([e,disabled])=>{if(e.isConnected)e.disabled=disabled;});blocked=[];}
-    busy=calculating;$('resolver').disabled=!activo||busy;$('cancelar-calculo').hidden=!busy;
+    busy=calculating;graph.permitirConexiones(mode==='manual'&&!busy);$('resolver').disabled=!activo||busy;$('cancelar-calculo').hidden=!busy;
     $('calculo-progreso').hidden=!busy;if(busy){$('calculo-progreso').removeAttribute('value');ultimoAnuncio=-Infinity;ultimaFase=null;}
     const labels={'sin-escenario':'Sin escenario. Crea tus destinos para comenzar.',listo:'Listo para calcular.',calculando:'Calculando recorridos; puedes cancelar sin perder el escenario.',completado:'Cálculo completado. El óptimo y las candidatas están disponibles.','sin-ciclo':'Cálculo completado: no existe un recorrido completo. Consulta las conexiones recomendadas.',cancelado:'Cálculo cancelado. Se conservaron todos los datos del escenario.',error:`No se pudo completar el cálculo. ${mensaje??'Inténtalo nuevamente.'}`,obsoleto:'Resultado obsoleto: el escenario cambió. Vuelve a calcular.'};
     $('calculo-estado').textContent=labels[estado];$('calculo-estado').dataset.estado=estado;
