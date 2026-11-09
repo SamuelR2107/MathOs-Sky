@@ -35,7 +35,7 @@ try {
  assert.deepEqual(await page.locator('#origen option:not([value=""])').allTextContents(),['Lima','Ica','Arequipa','Cusco','Ayacucho']);
  checks.push('Manual5: selección exacta, IDs locales y grafo vacío');
  await click('#abrir-editor');await page.locator('#desde').selectOption('0');assert.ok(await page.locator('#hasta option[value="0"]').isDisabled());await page.locator('#hasta').selectOption('1');
- await click('#guardar-conexion');assert.match(await page.locator('#error-distancia').textContent(),/positivo/);assert.equal((await state()).grafo.aristas.length,0);
+ await click('#guardar-conexion');assert.match(await page.locator('#error-distancia').textContent(),/Valor inválido/);assert.equal((await state()).grafo.aristas.length,0);
  for(const bad of ['0','-1','']){
   await page.locator('#distancia').fill(bad);await page.locator('#tiempo').fill('270');await page.locator('#costo').fill('70');await click('#guardar-conexion');assert.equal((await state()).grafo.aristas.length,0);
  }

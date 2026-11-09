@@ -8,6 +8,8 @@ const $ = id => document.getElementById(id);
 const all = selector => [...document.querySelectorAll(selector)];
 const node = (tag, text, className) => { const el=document.createElement(tag); if(text!==undefined)el.textContent=text;if(className)el.className=className;return el; };
 const norm = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const suggestionNumber = new Intl.NumberFormat('es-PE',{maximumFractionDigits:1});
+const suggestion = (value,key) => key==='costo'?`S/ ${suggestionNumber.format(value)}`:`${suggestionNumber.format(value)} ${units[key]}`;
 const units = {Distancia:'km',Tiempo:'min',Costo:'S/',distancia:'km',tiempo:'min',costo:'S/'};
 /** Controlador de presentación. No ejecuta algoritmos ni muta el grafo.
  * Los métodos render* reciben DTO externos; eventos ui:* permiten integrar etapa6. */
@@ -61,15 +63,15 @@ export function iniciarInterfaz() {
   function updateSelection() {
     const values=selectedNames();
     $('contador').textContent=`${selected.size} de 10 destinos seleccionados`;
-    $('etapa-pendiente').textContent=mode==='manual'?'Selecciona entre 5 y 10 destinos. Crear escenario inicia un grafo sin conexiones.':'Elige una cantidad válida para crear tu escenario.';
+    $('etapa-pendiente').textContent=mode==='manual'?'Selecciona entre 5 y 10 destinos.':'Elige entre 5 y 10 destinos.';
     $('seleccionados').replaceChildren(...values.map(d=>node('span',d.departamento,'chip')));
     all('.destination-option input').forEach(input=>{input.checked=selected.has(+input.value);input.disabled=selected.size===10&&!input.checked;});
-    $('config-error').textContent=mode==='manual'&&selected.size>0&&selected.size<5?'Selecciona al menos 5 destinos para preparar tu escenario.':'';
+    $('config-error').textContent=mode==='manual'&&selected.size>0&&selected.size<5?'Selecciona al menos 5 destinos.':'';
     if(!graphData) {
       updateOptions($('origen'),[],'Disponible al crear el escenario');
       $('origen').disabled=true;
     }
-    $('summary-title').textContent=mode==='manual'&&values.length?`${values.length} destinos en tu selección`:'Tú eliges el punto de partida';
+    $('summary-title').textContent=mode==='manual'&&values.length?`${values.length} destinos en tu selección`:'Punto de partida';
     $('summary-text').textContent=mode==='manual'&&values.length?values.map(d=>d.departamento).join(' · '):'El recorrido visita cada destino y regresa al origen.';
     if(mode==='automatico')checkCreateAvailability();
     else $('crear').disabled=selected.size<5||selected.size>10;
@@ -128,7 +130,7 @@ export function iniciarInterfaz() {
     if(valid){
       const a=graphData.nodos.find(n=>n.id===origen),b=graphData.nodos.find(n=>n.id===destino);
       const {campos}=evaluarPesosEntreDepartamentos({},a.idGeografico,b.idGeografico);
-      for(const [k,c] of Object.entries(campos)){const el=$(`sugerencia-${k}`);el.textContent=`${format(c.referencia)} ${units[k]}`;el.title=String(c.referencia);$(k).setAttribute('aria-describedby',`sugerencia-${k} error-${k}`);}
+      for(const [k,c] of Object.entries(campos)){const el=$(`sugerencia-${k}`);el.textContent=suggestion(c.referencia,k);el.title=el.textContent;$(k).setAttribute('aria-describedby',`sugerencia-${k} error-${k}`);}
     }
     $('usar-modelo').disabled=$('guardar-conexion').disabled=!valid;
     $('eliminar-conexion').disabled=true;
@@ -145,7 +147,7 @@ export function iniciarInterfaz() {
     updateOptions($('desde'),graphData.nodos,'Elige un destino');updateOptions($('hasta'),graphData.nodos,'Elige otro destino');
     $('desde').value=edge?String(edge.origen):'';$('hasta').value=edge?String(edge.destino):'';
     $('desde').disabled=$('hasta').disabled=false;
-    $('editor-hint').textContent='Selecciona dos destinos. Si la conexión existe podrás modificarla; si no, crearla.';
+    $('editor-hint').textContent='Elige los dos destinos.';
     updateEndpoints();dirty=false;editorPair=[$('desde').value,$('hasta').value];$('discard-confirm').hidden=true;
     opener=document.activeElement;$('editor').showModal();document.body.style.overflow='hidden';requestPair();
   }
@@ -175,7 +177,7 @@ export function iniciarInterfaz() {
       field.setAttribute('aria-invalid',String(!valid));field.setAttribute('aria-describedby',`error-${id}`);
       if(!valid){$(`error-${id}`).textContent=id==='desde'?'Elige el destino de salida.':'Elige un destino distinto.';first??=field;}
     }
-    if(first){$('editor-error').textContent='Selecciona dos destinos distintos antes de validar los pesos.';first.focus();return;}
+    if(first){$('editor-error').textContent='Elige dos destinos distintos.';first.focus();return;}
     const a=graphData.nodos.find(n=>n.id===extremos.origen),b=graphData.nodos.find(n=>n.id===extremos.destino);
     const evaluacion=evaluarPesosEntreDepartamentos(Object.fromEntries(['distancia','tiempo','costo'].map(k=>[k,$(k).value])),a.idGeografico,b.idGeografico);
     for(const [id,campo] of Object.entries(evaluacion.campos)){
@@ -187,19 +189,19 @@ export function iniciarInterfaz() {
     $('editor-valid').textContent=evaluacion.mensaje;
     $('editor-valid').classList.toggle('field-warning',evaluacion.nivel==='atipico');
     if(e.submitter?.id!=='guardar-conexion'){
-      if(evaluacion.nivel==='habitual')$('editor-valid').textContent+=' Pulsa Guardar conexión para aplicarlos.';
+      if(evaluacion.nivel==='habitual')$('editor-valid').textContent+=' Pulsa Guardar para aplicarlos.';
       emit('borrador-validado',{...extremos,nivel:evaluacion.nivel});return;
     }
     if(evaluacion.nivel==='atipico'){
-      const detalles=Object.entries(evaluacion.campos).filter(([,c])=>c.nivel==='atipico').map(([k,c])=>`${k}: ${format(c.valor)} ${units[k]} (sugerido: ${format(c.referencia)})`).join('\n');
+      const detalles=Object.entries(evaluacion.campos).filter(([,c])=>c.nivel==='atipico').map(([k,c])=>`${k}: ${suggestion(c.valor,k)} (sugerido: ${suggestion(c.referencia,k)})`).join('\n');
       if(!window.confirm(`${detalles}\n\n¿Guardar los valores personalizados sin cambiarlos?`)){
-        $('editor-valid').textContent='No se guardaron cambios. Revisa los valores inusuales.';return;
+        $('editor-valid').textContent='No se guardaron cambios.';return;
       }
     }
     emit('guardar-conexion',extremos);
   });
   $('usar-modelo').addEventListener('click',()=>{
-    if(['distancia','tiempo','costo'].some(k=>$(k).value!=='')&&!window.confirm('¿Reemplazar los valores del formulario por sugerencias del modelo? No se guardarán hasta que lo confirmes.'))return;
+    if(['distancia','tiempo','costo'].some(k=>$(k).value!=='')&&!window.confirm('¿Reemplazar estos valores por las sugerencias?'))return;
     emit('solicitar-pesos',editorValues());
   });
   $('eliminar-conexion').addEventListener('click',()=>{if(window.confirm('¿Eliminar esta conexión en ambos sentidos?'))emit('eliminar-conexion');});
@@ -207,12 +209,12 @@ export function iniciarInterfaz() {
     for(const k of ['distancia','tiempo','costo']){$(k).value=conexion.existe?String(conexion[k]):'';$(k).title=$(k).value;}
     $('guardar-conexion').textContent=conexion.existe?'Guardar cambios':'Guardar conexión';
     $('eliminar-conexion').disabled=!conexion.existe;
-    $('editor-hint').textContent=conexion.existe?'Conexión existente. Los cambios se aplicarán en ambos sentidos.':'Nueva conexión. Introduce los pesos o usa las sugerencias del modelo.';
+    $('editor-hint').textContent=conexion.existe?'Edita los pesos de la conexión.':'Introduce los pesos o usa las sugerencias.';
     dirty=false;
   }
   function aplicarSugerencias(pesos) {
     for(const k of ['distancia','tiempo','costo']){$(k).value=String(pesos[k]);$(k).title=$(k).value;}
-    clearEditorMessages();dirty=true;$('editor-valid').textContent='Sugerencias cargadas, aún sin guardar. Puedes editarlas.';
+    clearEditorMessages();dirty=true;$('editor-valid').textContent='Sugerencias cargadas. Falta guardar.';
   }
   function mensajeEdicion(mensaje,error=false) {
     $('editor-error').textContent=error?mensaje:'';$('editor-valid').textContent=error?'':mensaje;
@@ -234,14 +236,14 @@ export function iniciarInterfaz() {
     $('graph-context').hidden=true;$('graph-status').textContent=data?`${data.nodos.length} destinos · ${data.conexiones.length} ${data.conexiones.length===1?'conexión':'conexiones'}`:'Sin escenario';
     updateOptions($('origen'),data?.nodos??[],'Elige tu punto de partida');$('origen').disabled=!data;
     if(data?.origen!==undefined)$('origen').value=String(data.origen);
-    $('abrir-editor').disabled=!data;$('editor-disponible').textContent=data?'Selecciona una conexión en el grafo o en la lista para editarla.':'Crea un escenario para habilitar el editor.';
+    $('abrir-editor').disabled=!data;$('editor-disponible').textContent=data?'Selecciona una conexión para editarla.':'Crea un escenario para habilitar el editor.';
     $('conexiones-card').hidden=!data;
     const list=$('lista-conexiones');list.replaceChildren();
     if(data) {
       $('summary-title').textContent=`${data.nodos.length} destinos en el escenario activo`;
       $('summary-text').textContent=data.nodos.map(n=>n.nombre).join(' · ');
       $('conexiones-cantidad').textContent=String(data.conexiones.length);
-      if(!data.conexiones.length)list.append(node('p','Sin conexiones. Abre el gestor para agregar la primera.','muted'));
+      if(!data.conexiones.length)list.append(node('p','Sin conexiones. Agrega la primera.','muted'));
       for(const e of data.conexiones) {
         const names=id=>data.nodos.find(n=>n.id===id)?.nombre;
         const button=node('button',undefined,'connection-item');button.type='button';
@@ -303,7 +305,7 @@ export function iniciarInterfaz() {
     if(data.sinCiclo) {
       const area=$('recomendaciones');area.replaceChildren(node('p',`${data.resultado.cantidadCandidatos} candidatas · 0 válidas · ${data.resultado.cantidadCandidatos} inválidas`));
       if(data.diagnostico) {
-        area.append(node('h3',`${data.diagnostico.cantidadMinimaConexiones} conexiones nuevas permitirían completar un recorrido`),node('p','Esta es una recomendación mínima. Puede haber otras alternativas con la misma cantidad de conexiones.'));
+        area.append(node('h3',`${data.diagnostico.cantidadMinimaConexiones} conexiones nuevas permitirían completar un recorrido`),node('p','Propuesta mínima; puede haber otras equivalentes.'));
         const list=node('ul');data.diagnostico.conexionesFaltantes.forEach(e=>{const li=node('li'),b=node('button',`${data.nombres[e.origen]} — ${data.nombres[e.destino]}: revisar`,'text-button');b.type='button';b.addEventListener('click',()=>openEditor(e));li.append(b);list.append(li);});area.append(list);
       }else area.append(node('p','El diagnóstico de conexiones todavía no está disponible.'));
       announce('No se encontró un recorrido completo.');return;
@@ -329,14 +331,14 @@ export function iniciarInterfaz() {
   function renderPlan(plan,nombres,resultados) {
     if(!plan)return;
     $('resultado-vacio').hidden=true;$('resultado-contenido').hidden=true;$('sin-ciclo').hidden=false;
-    $('contexto-correccion').textContent=resultados.estado==='vigente'?'No encontramos un recorrido completo. Completa las conexiones propuestas.':'El escenario cambió. El cálculo anterior ya no está vigente; este es tu plan de corrección.';
+    $('contexto-correccion').textContent=resultados.estado==='vigente'?'No encontramos un recorrido completo. Completa las conexiones propuestas.':'El escenario cambió. Completa las conexiones y vuelve a calcular.';
     $('pesos-correccion').hidden=!plan.pendientes.length;
-    if(!busy&&resultados.estado!=='vigente')$('calculo-estado').textContent='Sin cálculo vigente. Puedes continuar con el plan de corrección y calcular al finalizar.';
+    if(!busy&&resultados.estado!=='vigente')$('calculo-estado').textContent='Completa las conexiones y vuelve a calcular.';
     const area=$('recomendaciones');area.replaceChildren();
     if(resultados.estado==='vigente')area.append(node('p',`${resultados.valor.cantidadCandidatos} candidatas · 0 válidas`));
     const stats=node('p',`${plan.total} recomendadas originalmente · ${plan.agregadas} agregadas · ${plan.pendientes.length} pendientes`,'repair-stats');stats.id='progreso-correccion';area.append(stats);
     const progress=node('progress');progress.max=Math.max(1,plan.total);progress.value=plan.agregadas;progress.setAttribute('aria-label','Progreso de conexiones recomendadas');area.append(progress);
-    const warning=plan.minimoVigente?'Esta es una recomendación mínima. Puede haber otras alternativas con la misma cantidad de conexiones.':'Cambió la topología fuera del plan. Esta propuesta podría no ser el mínimo actual. Puedes actualizar las recomendaciones.';
+    const warning=plan.minimoVigente?'Propuesta mínima; puede haber otras equivalentes.':'Cambió la topología fuera del plan. Esta propuesta podría no ser el mínimo actual. Puedes actualizar las recomendaciones.';
     area.append(node('p',warning,'small'));
     if(!plan.garantizaRecorrido)area.append(node('p','Se eliminó una conexión del recorrido propuesto. Completar esta lista ya no garantiza el recorrido; actualiza las recomendaciones.','status-invalid'));
     const list=node('ul');
@@ -381,7 +383,7 @@ export function iniciarInterfaz() {
   function renderEstado({modo:actualMode}) {
     $('personalizar').hidden=!graphData||actualMode!=='automatico';
     graph.permitirConexiones(actualMode==='manual'&&!busy);
-    $('editor-disponible').textContent=graphData&&actualMode==='manual'?'Arrastra entre destinos o usa Enter/Espacio en origen y destino. Escape cancela. También puedes usar Gestionar conexiones.':graphData?'Selecciona una conexión o personaliza el escenario para conectar destinos.':'Crea un escenario para habilitar el editor.';
+    $('editor-disponible').textContent=graphData&&actualMode==='manual'?'Arrastra entre destinos. Teclado: Enter/Espacio para elegir; Escape para cancelar.':graphData?'Selecciona una conexión o personaliza el escenario.':'Crea un escenario para habilitar el editor.';
   }
   function irA(id){history.pushState(null,'',`#${id}`);navigate(true);window.scrollTo(0,0);}
   function renderCalculo({estado,activo,mensaje}) {
@@ -392,9 +394,9 @@ export function iniciarInterfaz() {
     }else if(!calculating&&busy){blocked.forEach(([e,disabled])=>{if(e.isConnected)e.disabled=disabled;});blocked=[];}
     busy=calculating;graph.permitirConexiones(mode==='manual'&&!busy);$('resolver').disabled=!activo||busy;$('cancelar-calculo').hidden=!busy;
     $('calculo-progreso').hidden=!busy;if(busy){$('calculo-progreso').removeAttribute('value');ultimoAnuncio=-Infinity;ultimaFase=null;}
-    const labels={'sin-escenario':'Sin escenario. Crea tus destinos para comenzar.',listo:'Listo para calcular.',calculando:'Calculando recorridos; puedes cancelar sin perder el escenario.',completado:'Cálculo completado. El óptimo y las candidatas están disponibles.','sin-ciclo':'Cálculo completado: no existe un recorrido completo. Consulta las conexiones recomendadas.',cancelado:'Cálculo cancelado. Se conservaron todos los datos del escenario.',error:`No se pudo completar el cálculo. ${mensaje??'Inténtalo nuevamente.'}`,obsoleto:'Resultado obsoleto: el escenario cambió. Vuelve a calcular.'};
+    const labels={'sin-escenario':'Crea un escenario para comenzar.',listo:'Listo para calcular.',calculando:'Calculando… Puedes cancelar.',completado:'Cálculo completado.','sin-ciclo':'Sin recorrido completo. Revisa las conexiones sugeridas.',cancelado:'Cálculo cancelado. Escenario conservado.',error:`No se pudo completar el cálculo. ${mensaje??'Inténtalo nuevamente.'}`,obsoleto:'El escenario cambió. Vuelve a calcular.'};
     $('calculo-estado').textContent=labels[estado];$('calculo-estado').dataset.estado=estado;
-    $('resolver-help').textContent=activo?'Evalúa todas las candidatas sin bloquear la interfaz.':'Crea un escenario para calcular.';
+    $('resolver-help').textContent=activo?'Calcula la mejor ruta.':'Crea un escenario para calcular.';
     $('vista-rutas').setAttribute('aria-busy',String(busy));
   }
   function renderProgreso({fase,evaluadas,total}){

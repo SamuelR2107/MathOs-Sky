@@ -17,8 +17,8 @@ test('formulario: aproximaciones y decimales se aceptan sin cambiar pesos indepe
 for(const [key,l] of Object.entries(L)){
  test(`formulario: ${key} límites inclusivos y mensajes por campo`,()=>{
   for(const factor of [l.habitualMin,l.habitualMax])assert.equal(evaluar({...ref,[key]:100*factor},ref).campos[key].nivel,'habitual');
-  for(const factor of [l.permitidoMin,l.permitidoMax]){const c=evaluar({...ref,[key]:100*factor},ref).campos[key];assert.equal(c.nivel,'atipico');assert.match(c.mensaje,/requiere confirmación/);assert.ok(c.mensaje.includes(l.unidad));}
-  for(const v of [100*l.permitidoMin-1e-6,100*l.permitidoMax+1e-6]){const e=evaluar({...ref,[key]:v},ref);assert.equal(e.nivel,'invalido');assert.match(e.campos[key].mensaje,/fuera del rango/);assert.equal(e.campos[Object.keys(ref).find(k=>k!==key)].nivel,'habitual');}
+  for(const factor of [l.permitidoMin,l.permitidoMax]){const c=evaluar({...ref,[key]:100*factor},ref).campos[key];assert.equal(c.nivel,'atipico');assert.match(c.mensaje,/Requiere confirmación/);assert.equal(c.mensaje,'Valor inusual. Requiere confirmación.');}
+  for(const v of [100*l.permitidoMin-1e-6,100*l.permitidoMax+1e-6]){const e=evaluar({...ref,[key]:v},ref);assert.equal(e.nivel,'invalido');assert.match(e.campos[key].mensaje,/Fuera del rango permitido/);assert.equal(e.campos[Object.keys(ref).find(k=>k!==key)].nivel,'habitual');}
  });
  test(`formulario: ${key} valores no numéricos, vacíos y peligrosos`,()=>{
   for(const v of ['', ' ', 'texto','0x10',null,undefined,false,NaN,Infinity,-Infinity,'NaN','Infinity',0,-1,1e-7,Number.MAX_VALUE])assert.equal(evaluar({...ref,[key]:v},ref).nivel,'invalido',String(v));
@@ -27,7 +27,7 @@ for(const [key,l] of Object.entries(L)){
   const v=l.absolutoMax*2;assert.equal(evaluar({...ref,[key]:v},{...ref,[key]:v}).nivel,'invalido');assert.equal(evaluar({...ref,[key]:l.absolutoMin/2},{...ref,[key]:l.absolutoMin/2}).nivel,'invalido');
  });
 }
-test('formulario: referencia ausente no permite guardar',()=>{assert.equal(evaluar(ref,{}).nivel,'invalido');assert.match(evaluar(ref,{}).campos.tiempo.mensaje,/referencia válida/);});
+test('formulario: referencia ausente no permite guardar',()=>{assert.equal(evaluar(ref,{}).nivel,'invalido');assert.match(evaluar(ref,{}).campos.tiempo.mensaje,/Rango no válido/);});
 test('formulario: Lima-Ica acepta300/450, advierte800 y rechaza extremos',()=>{
  const r=calcularPesosGeograficos(departamentosPeru[13],departamentosPeru[9]);
  for(const d of [300,450])assert.equal(evaluar({...r,distancia:d},r).nivel,'habitual');assert.equal(evaluar({...r,distancia:800},r).nivel,'atipico');for(const d of [.001,100000])assert.equal(evaluar({...r,distancia:d},r).nivel,'invalido');
@@ -38,4 +38,9 @@ test('formulario: mensajes breves sin perder clasificación ni referencia numér
  for(const [key,l] of Object.entries(L))for(const value of ['',100*l.permitidoMin-1,100*l.permitidoMax]){
   const c=evaluar({...ref,[key]:value},ref).campos[key];assert.ok(c.mensaje.length<115);assert.equal(c.referencia,100);assert.ok(Number.isFinite(c.minimo));assert.ok(Number.isFinite(c.maximo));
  }
+});
+
+test('formulario: errores simples sin rangos decimales y sin alterar límites',()=>{
+ const cases=[['','Valor inválido.'],[0,'Valor inválido.'],[.001,'Fuera del rango permitido.'],[10000,'Fuera del rango permitido.']];
+ for(const [valor,mensaje] of cases){const c=evaluar({...ref,distancia:valor},ref).campos.distancia;assert.equal(c.mensaje,mensaje);assert.equal(c.minimo,40);assert.equal(c.maximo,400);assert.equal(c.nivel,'invalido');}
 });

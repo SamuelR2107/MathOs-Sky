@@ -7,7 +7,6 @@ export const LIMITES_PESOS_MANUALES=Object.freeze({
  tiempo:Object.freeze({nombre:'Tiempo',unidad:'min',habitualMin:.7,habitualMax:3,permitidoMin:.3,permitidoMax:6,absolutoMin:.1,absolutoMax:14400}),
  costo:Object.freeze({nombre:'Costo',unidad:'S/',habitualMin:.6,habitualMax:3,permitidoMin:.2,permitidoMax:6,absolutoMin:.01,absolutoMax:100000})
 });
-const numero=new Intl.NumberFormat('es-PE',{maximumFractionDigits:4});
 function leerNumero(valor){
  if(typeof valor==='number')return valor;
  if(typeof valor!=='string'||!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(valor.trim()))return NaN;
@@ -19,14 +18,14 @@ export function evaluarPesosManuales(valores,referencia){
   const valor=leerNumero(valores?.[clave]),ref=referencia?.[clave];
   const minimo=Math.max(l.absolutoMin,ref*l.permitidoMin),maximo=Math.min(l.absolutoMax,ref*l.permitidoMax);
   let nivel='habitual',mensaje='';
-  if(!Number.isFinite(valor)||valor<=0) {nivel='invalido';mensaje=`${l.nombre}: usa un número positivo y finito (${l.unidad}).`;}
-  else if(!Number.isFinite(ref)||ref<=0||minimo>maximo){nivel='invalido';mensaje=`Sin referencia válida. Elige de nuevo los destinos.`;}
-  else if(valor<minimo||valor>maximo){nivel='invalido';mensaje=`Valor fuera del rango: ${numero.format(minimo)}–${numero.format(maximo)} ${l.unidad}.`;}
-  else if(valor<ref*l.habitualMin||valor>ref*l.habitualMax){nivel='atipico';mensaje=`${l.nombre}: valor inusual; requiere confirmación (${l.unidad}).`;}
+  if(!Number.isFinite(valor)||valor<=0) {nivel='invalido';mensaje=`Valor inválido.`;}
+  else if(!Number.isFinite(ref)||ref<=0||minimo>maximo){nivel='invalido';mensaje=`Rango no válido.`;}
+  else if(valor<minimo||valor>maximo){nivel='invalido';mensaje=`Fuera del rango permitido.`;}
+  else if(valor<ref*l.habitualMin||valor>ref*l.habitualMax){nivel='atipico';mensaje=`Valor inusual. Requiere confirmación.`;}
   campos[clave]={nivel,mensaje,valor,referencia:ref,minimo,maximo};
  }
  const nivel=Object.values(campos).some(c=>c.nivel==='invalido')?'invalido':Object.values(campos).some(c=>c.nivel==='atipico')?'atipico':'habitual';
- return {nivel,campos,mensaje:{habitual:'Valores correctos.',atipico:'Valores inusuales: revisa estas estimaciones.',invalido:'Revisa los campos marcados.'}[nivel]};
+ return {nivel,campos,mensaje:{habitual:'Valores correctos.',atipico:'Valores inusuales. Revisa antes de guardar.',invalido:'Revisa los campos marcados.'}[nivel]};
 }
 export function evaluarPesosEntreDepartamentos(valores,idA,idB){
  return evaluarPesosManuales(valores,calcularPesosGeograficos(obtenerDepartamento(idA),obtenerDepartamento(idB)));
